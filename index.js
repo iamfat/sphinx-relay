@@ -12,6 +12,27 @@ Winston.remove(Winston.transports.Console).add(Winston.transports.Console, {
 });
 
 var config = YAML.safeLoad(require('fs').readFileSync('./config/default.yaml', 'utf8'));
+config.relay = config.relay || {};
+
+var ZeroMQ = require('zmq');
+var mqPath = config.relay.mq || 'ipc:///var/run/sphinx-relay.mq';
+var mq = ZeroMQ.socket('push');
+mq.bind(mqPath, function(err) {
+    if (err) {
+        Winston.error(err.message);
+        throw err;
+    }
+});
+
+// run several workers
+var num = config.relay.workers || 3;
+var forever = require('forever-monitor');
+while (num--) {
+    var workerOpt = {};
+    if (argv.v) workerOpt.options = ['-v'];
+    new (forever.Monitor)('worker.js', workerOpt).start();
+}
+
 var server = MySQL.createServer();
 
 var _id=0;
@@ -67,21 +88,22 @@ server.on('connection', function(conn) {
 
     conn.on('query', function(SQL) {
         
-        Winston.debug("#" + _id + " query: " + SQL);
-        
         if (/^(INSERT|REPLACE|UPDATE)/i.test(SQL)) {
 
+            Winston.debug("RELAY[" + process.pid + "] #" + _id + " query: " + SQL);
+        
             // return OK immediately...
             conn.writeOk({
                 fieldCount: 0,
                 affectedRows: 0,
-                insertId: 9999999, // insertId cannot be 0, just set it to a big number :(
+                insertId: 1, // insertId cannot be 0, just set it to 1. :(
                 serverStatus: 2,
-                warningStatus: 0 
+                warningStatus: 0
             });
             
-            // TODO: push command to message queue...
-
+            // push command to message queue...
+            mq.send(SQL);
+            
             return;
         }
 
@@ -112,7 +134,5 @@ server.on('connection', function(conn) {
 
     conn.on('end', remote.end.bind(remote));    
 });
-
-config.relay = config.relay || {};
 
 server.listen(config.relay.port || 9306);
