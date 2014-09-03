@@ -1,0 +1,8 @@
+---
+relay:
+  # port: 9306
+remote:
+  # sphinx host
+  host: sphinx
+  # port: 9306
+...
