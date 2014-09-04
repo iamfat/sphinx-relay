@@ -1,8 +1,10 @@
 ---
 relay:
   # port: 9306
+  mq: ipc://./sphinx-relay.mq
+  workers: 1
 remote:
   # sphinx host
-  host: sphinx
+  host: 192.168.59.103
   # port: 9306
 ...

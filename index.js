@@ -11,7 +11,7 @@ Winston.remove(Winston.transports.Console).add(Winston.transports.Console, {
   timestamp: true
 });
 
-var config = YAML.safeLoad(require('fs').readFileSync('./config/default.yaml', 'utf8'));
+var config = YAML.safeLoad(require('fs').readFileSync('./config/default.yml', 'utf8'));
 config.relay = config.relay || {};
 
 var ZeroMQ = require('zmq');
