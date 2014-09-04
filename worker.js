@@ -54,28 +54,46 @@ remote.on('error', function(err) {
     }, 1000);
 });
 
+var queue = [], querying = false;
 worker.on('message', function(SQL) {
-    Winston.debug('WORKER[' + process.pid + ']' + ': ' + SQL);
+    SQL = SQL.toString('utf8');
     if (!SQL) return;
     
-    remote.query(SQL.toString('utf8'), function(err) { // overloaded args, either (err, result :object)
-        // or (err, rows :array, columns :array)
-        if (err) {
-            Winston.error(err.message);
+    queue.push(SQL);
+
+    if (!querying) {
+        _next();
+    }
+    
+    function _next() {
+        
+        if (queue.length == 0) {
+            querying = false;
             return;
         }
         
-        // We actually don't care about the result...
-        if (Array.isArray(arguments[1])) {
-            // response to a 'select', 'show' or similar
-            var rows = arguments[1], columns = arguments[2];
-            Winston.debug({rows:rows, columns:columns});
-        } else {
-            // response to an 'insert', 'update' or 'delete'
-            var result = arguments[1];
-            Winston.debug(result);
-        }
-    });
+        querying = true;   
+        Winston.debug('WORKER[' + process.pid + ']' + ': ' + SQL);
+        remote.query(queue.shift(), function(err) { // overloaded args, either (err, result :object)
+            // or (err, rows :array, columns :array)
+            
+            // We actually don't care about the result...
+            if (err) {
+                Winston.error(err.message);
+            } else if (Array.isArray(arguments[1])) {
+                // response to a 'select', 'show' or similar
+                var rows = arguments[1], columns = arguments[2];
+                Winston.debug({rows:rows, columns:columns});
+            } else {
+                // response to an 'insert', 'update' or 'delete'
+                var result = arguments[1];
+                Winston.debug(result);
+            }
+            
+            // collector.send("done");
+            setTimeout(_next, 0);
+        });
+    }
     
 });
 
